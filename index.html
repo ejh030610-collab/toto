@@ -450,22 +450,40 @@ function renderGames() {
         </div>
       </div>
       <div class="odds">
-        <div class="odd" data-game="${g.no}" data-key="${g.no}_홈승" onclick="toggleOdd('${g.no}','홈승','${g.odds.win}','${g.home}')">
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_홈승" data-label="홈승" data-odd="${g.odds.win}" data-team="${g.home.replace(/"/g,'&quot;')}">
           <div class="odd-label">홈승</div>
           <div class="odd-value ${g.odds.win==='-'?'dash':''}">${g.odds.win}</div>
         </div>
-        <div class="odd" data-game="${g.no}" data-key="${g.no}_무" onclick="toggleOdd('${g.no}','무','${g.odds.draw}','무승부')">
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_무" data-label="무" data-odd="${g.odds.draw}" data-team="무승부">
           <div class="odd-label">무</div>
           <div class="odd-value ${g.odds.draw==='-'?'dash':''}">${g.odds.draw}</div>
         </div>
-        <div class="odd" data-game="${g.no}" data-key="${g.no}_원정승" onclick="toggleOdd('${g.no}','원정승','${g.odds.lose}','${g.away}')">
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_원정승" data-label="원정승" data-odd="${g.odds.lose}" data-team="${g.away.replace(/"/g,'&quot;')}">
           <div class="odd-label">원정승</div>
           <div class="odd-value ${g.odds.lose==='-'?'dash':''}">${g.odds.lose}</div>
         </div>
       </div>
     </div>`;
   }).join('');
+
+  // 선택된 배당 UI 복원
+  selectedOdds.forEach(o => {
+    const el = document.querySelector(`.odd[data-key="${o.key}"]`);
+    if (el) el.classList.add('selected');
+  });
 }
+
+// 이벤트 위임으로 배당 클릭 처리
+document.addEventListener('click', function(e) {
+  const odd = e.target.closest('.odd');
+  if (!odd) return;
+  const gameNo = odd.dataset.game;
+  const label  = odd.dataset.label;
+  const oddVal = odd.dataset.odd;
+  const team   = odd.dataset.team;
+  if (!gameNo || !label || !oddVal || oddVal === '-') return;
+  toggleOdd(gameNo, label, oddVal, team);
+});
 
 function toggleOdd(gameNo, label, odd, teamName) {
   if (odd === '-' || !odd) return;
