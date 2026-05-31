@@ -102,12 +102,7 @@
 
 <div class="container">
   <div class="controls">
-    <select id="round-sel" onchange="loadData()">
-      <option value="62">62회차</option>
-      <option value="63">63회차</option>
-      <option value="64" selected>64회차</option>
-      <option value="65">65회차</option>
-    </select>
+    <select id="round-sel" onchange="loadData()"><option>로딩중...</option></select>
     <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
     <button class="filter-btn" onclick="setFilter('bs',this)">⚾ 야구</button>
     <button class="filter-btn" onclick="setFilter('sc',this)">⚽ 축구</button>
@@ -206,6 +201,23 @@ function getWR(name) {
     if (k.length > 3 && (k.includes(nk.slice(0,3)) || nk.includes(k.slice(0,3)))) return v;
   }
   return null;
+}
+
+async function initRounds() {
+  try {
+    const res = await fetch(`${API}/api/rounds`);
+    const data = await res.json();
+    const sel = document.getElementById('round-sel');
+    sel.innerHTML = data.rounds.map(r =>
+      `<option value="${r.round}" ${r.current?'selected':''}>${r.round}회차${r.current?' (발매중)':''}</option>`
+    ).join('');
+    // 현재 회차로 자동 설정
+    if (data.currentRound) sel.value = data.currentRound;
+  } catch(e) {
+    // 실패시 기본값
+    const sel = document.getElementById('round-sel');
+    sel.innerHTML = ['63','64','65','66'].map(r => `<option value="${r}">${r}회차</option>`).join('');
+  }
 }
 
 async function loadData() {
@@ -433,7 +445,7 @@ function clearCombo() {
   renderGames();
 }
 
-loadData();
+initRounds().then(() => loadData());
 </script>
 </body>
 </html>
