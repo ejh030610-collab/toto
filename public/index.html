@@ -125,7 +125,7 @@
 
   <div class="stats">
     <div class="stat"><div class="stat-label">전체 경기</div><div class="stat-value" id="s-total">-</div></div>
-    <div class="stat"><div class="stat-label">55% 이상 경기</div><div class="stat-value green" id="s-filtered">-</div></div>
+    <div class="stat"><div class="stat-label" id="s-filtered-label">55% 이상 경기</div><div class="stat-value green" id="s-filtered">-</div></div>
     <div class="stat"><div class="stat-label">내 배당</div><div class="stat-value" id="s-myodds">-</div></div>
   </div>
 
@@ -310,6 +310,11 @@ function updateWRFilter() {
   wrMax = parseInt(document.getElementById('wr-max').value);
   document.getElementById('wr-min-val').textContent = wrMin + '%';
   document.getElementById('wr-max-val').textContent = wrMax + '%';
+  // 라벨 업데이트
+  const label = wrMin === 0 && wrMax === 100
+    ? '55% 이상 경기'
+    : `${wrMin}%~${wrMax}% 경기`;
+  document.getElementById('s-filtered-label').textContent = label;
   renderGames();
 }
 
@@ -323,8 +328,12 @@ function setFilter(sport, btn) {
 function renderGames() {
   const filtered = allGames.filter(g => currentFilter==='all' || g.sport===currentFilter);
   const withWR = filtered.map(g => ({...g, homeWR:getWR(g.home), awayWR:getWR(g.away)}));
+  // 슬라이더 범위가 기본값이면 55% 기준, 아니면 슬라이더 범위 적용
+  const minThreshold = (wrMin === 0 && wrMax === 100) ? 0.55 : wrMin / 100;
+  const maxThreshold = (wrMin === 0 && wrMax === 100) ? 1.0  : wrMax / 100;
   const qualified = withWR.filter(g =>
-    (g.homeWR!==null && g.homeWR>=0.55) || (g.awayWR!==null && g.awayWR>=0.55)
+    (g.homeWR!==null && g.homeWR>=minThreshold && g.homeWR<=maxThreshold) ||
+    (g.awayWR!==null && g.awayWR>=minThreshold && g.awayWR<=maxThreshold)
   );
   const display = (wrMin===0 && wrMax===100) ? withWR :
     withWR.filter(g => {
