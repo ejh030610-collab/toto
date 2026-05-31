@@ -189,6 +189,7 @@ let currentFilter = 'all';
 let wrMin = 0;
 let wrMax = 100;
 let selectedOdds = [];
+let recordCache = {}; // 팀 전적 캐시
 
 // 팀명 매핑
 const TEAM_MAP = {
@@ -218,6 +219,16 @@ const TEAM_MAP = {
 };
 
 function normalizeKey(n) { return n.replace(/\s+/g,'').toLowerCase(); }
+
+function getWRByGame(g, side) {
+  // 국가대항전은 전적 캐시 우선
+  const isIntl = ['남축INTL','INTL','남축올','친축','AFC','J23'].some(k => (g.league||'').includes(k));
+  if (isIntl) {
+    const rec = getRecordWR(g, side);
+    if (rec !== null) return rec;
+  }
+  return getWR(side === 'home' ? g.home : g.away);
+}
 
 function getWR(name) {
   if (!name) return null;
@@ -266,6 +277,7 @@ async function loadData() {
     document.getElementById('round-badge').className = 'badge';
     renderGames();
     await fetchWinRates();
+    await fetchTeamRecords();
     renderGames();
   } catch(e) {
     document.getElementById('game-list').innerHTML = `<div class="error-wrap">❌ 오류: ${e.message}</div>`;
@@ -284,6 +296,39 @@ async function fetchWinRates() {
   } catch(e) {
     setAiStatus('error', '⚠️ 승률 조회 실패');
   }
+}
+
+// 팀 전적 기반 승률 조회 (국가대항전 등)
+async function fetchTeamRecords() {
+  const intlGames = allGames.filter(g =>
+    g.homeSeq && g.awaySeq && g.gameDate &&
+    ['남축INTL','INTL','남축올','친축','AFC','J23'].some(k => (g.league||'').includes(k))
+  );
+  if (intlGames.length === 0) return;
+
+  setAiStatus('loading', '국가대항전 전적 조회중...');
+
+  const promises = intlGames.map(async g => {
+    const cacheKey = `${g.homeSeq}_${g.awaySeq}`;
+    if (recordCache[cacheKey]) return;
+    try {
+      const [homeRes, awayRes] = await Promise.all([
+        fetch(`${API}/api/teamrecord?home_seq=${g.homeSeq}&away_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=h`),
+        fetch(`${API}/api/teamrecord?home_seq=${g.homeSeq}&away_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=a`),
+      ]);
+      const homeData = await homeRes.json();
+      const awayData = await awayRes.json();
+      recordCache[cacheKey] = { home: homeData.winRate, away: awayData.winRate };
+    } catch(e) {}
+  });
+  await Promise.all(promises);
+  setAiStatus('done', `✅ 승률 조회 완료`);
+}
+
+function getRecordWR(g, side) {
+  if (!g.homeSeq || !g.awaySeq) return null;
+  const key = `${g.homeSeq}_${g.awaySeq}`;
+  return recordCache[key]?.[side] ?? null;
 }
 
 function setAiStatus(type, msg) {
@@ -313,6 +358,12 @@ function parseGames(html) {
     const home = ul.querySelector('.a6 .tn')?.textContent.trim();
     const away = ul.querySelector('.a8 .tn, .a8 .tnb')?.textContent.trim();
     const odds = [...ul.querySelectorAll('.a9 .pt')].map(e => e.textContent.trim());
+
+    // 팀 ID 추출: onclick="tr('homeSeq','awaySeq','날짜','h')"
+    const trMatch = ul.querySelector('.a6 .tn, .a6 .tnb')?.getAttribute('onclick')?.match(/tr\('(\d+)','(\d+)','([^']+)'/);
+    const homeSeq = trMatch ? trMatch[1] : null;
+    const awaySeq = trMatch ? trMatch[2] : null;
+    const gameDate = trMatch ? trMatch[3] : null;
     if (!no || !home || !away) return;
     const statusText = ul.querySelector('.tag')?.textContent.trim() || '';
     if (statusText !== '경기전') return;
@@ -325,6 +376,7 @@ function parseGames(html) {
       home: home.replace(/\s*\d+\s*$/,'').trim(),
       away: away.replace(/^\s*\d+\s*/,'').trim(),
       odds: { win, draw, lose },
+      homeSeq, awaySeq, gameDate,
     });
   });
   const seen = new Set();
@@ -358,7 +410,7 @@ function setFilter(sport, btn) {
 
 function renderGames() {
   const filtered = allGames.filter(g => currentFilter==='all' || g.sport===currentFilter);
-  const withWR = filtered.map(g => ({...g, homeWR:getWR(g.home), awayWR:getWR(g.away)}));
+  const withWR = filtered.map(g => ({...g, homeWR:getWRByGame(g,"home"), awayWR:getWRByGame(g,"away")}));
   // 슬라이더 범위가 기본값이면 55% 기준, 아니면 슬라이더 범위 적용
   const minThreshold = (wrMin === 0 && wrMax === 100) ? 0.55 : wrMin / 100;
   const maxThreshold = (wrMin === 0 && wrMax === 100) ? 1.0  : wrMax / 100;
