@@ -11,12 +11,7 @@ module.exports = async (req, res) => {
     });
     const html = await response.text();
 
-    // 현재 발매중인 회차 추출: "승부식 XX회차 발매중" 패턴
-    const rounds = [];
-    const activeMatch = html.match(/승부식.*?(\d+)회차.*?발매중/);
-    const currentRound = activeMatch ? parseInt(activeMatch[1]) : null;
-
-    // master_seq 추출: get_gameinfo_body('proto','pt1','2026','XX','','','YYYYY' 패턴
+    // master_seq 추출
     const seqMap = {};
     const seqRegex = /get_gameinfo_body\('proto','pt1','\d+','(\d+)','','','(\d+)'/g;
     let m;
@@ -24,10 +19,34 @@ module.exports = async (req, res) => {
       seqMap[m[1]] = m[2];
     }
 
+    // 발매중 회차 찾기 - 여러 패턴 시도
+    let currentRound = null;
+    const patterns = [
+      /승부식.*?(\d+)회차.*?발매중/,
+      /(\d+)회차\s*발매중/,
+      /발매중[^<]*(\d+)회차/,
+    ];
+    for (const pat of patterns) {
+      const match = html.match(pat);
+      if (match) { currentRound = parseInt(match[1]); break; }
+    }
+
+    // 패턴 실패시 seqMap의 가장 큰 회차 사용
+    if (!currentRound && Object.keys(seqMap).length > 0) {
+      currentRound = Math.max(...Object.keys(seqMap).map(Number));
+    }
+
+    // 현재 회차 기준 앞뒤 회차 목록 생성
+    const rounds = [];
     if (currentRound) {
-      // 현재 회차 기준 앞뒤 3개씩 표시
       for (let i = currentRound - 2; i <= currentRound + 3; i++) {
-        if (i > 0) rounds.push({ round: i, seq: seqMap[i] || null, current: i === currentRound });
+        if (i > 0) {
+          rounds.push({
+            round: i,
+            seq: seqMap[i] || null,
+            current: i === currentRound,
+          });
+        }
       }
     }
 
