@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>승부식 경기 분석기</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif; background: #f5f5f0; color: #1a1a1a; }
+
+  header { background: #fff; border-bottom: 1px solid #e8e8e4; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  .badge { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: #e8f4ee; color: #1a7a47; font-weight: 500; }
+  .badge.loading { background: #fef3e2; color: #8a4f00; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+  .controls { display: flex; gap: 8px; margin-bottom: 1.2rem; flex-wrap: wrap; align-items: center; }
+  select { font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+  .filter-btn { font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+  .filter-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .filter-btn:hover:not(.active) { background: #f0f0ec; }
+  .reload-btn { margin-left: auto; font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+  .reload-btn:hover { background: #f0f0ec; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: #fff; border-radius: 10px; padding: 1rem 1.2rem; border: 1px solid #e8e8e4; }
+  .stat-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .stat-value { font-size: 24px; font-weight: 600; }
+  .stat-value.green { color: #1a7a47; }
+
+  .ai-status { background: #fff; border: 1px solid #e8e8e4; border-radius: 10px; padding: 0.8rem 1.2rem; margin-bottom: 1.2rem; font-size: 13px; color: #888; display: flex; align-items: center; gap: 8px; }
+  .ai-status.done { color: #1a7a47; }
+  .ai-status.error { color: #e53935; }
+
+  .game-list { display: flex; flex-direction: column; gap: 8px; }
+  .game-card { background: #fff; border-radius: 12px; padding: 1rem 1.2rem; border: 1px solid #e8e8e4; border-left: 3px solid #1a7a47; }
+
+  .game-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .sport-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+  .sport-bs { background: #fef3e2; color: #8a4f00; }
+  .sport-sc { background: #e8f5e9; color: #1b5e20; }
+  .sport-bk { background: #ede7f6; color: #311b92; }
+  .sport-vl { background: #fce4ec; color: #880e4f; }
+  .game-time { font-size: 12px; color: #888; }
+  .league { font-size: 12px; color: #aaa; margin-left: auto; }
+
+  .matchup { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .team-away { text-align: right; }
+  .team-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .win-rate { font-size: 13px; color: #888; }
+  .win-rate.high { color: #1a7a47; font-weight: 600; }
+  .win-rate.loading { color: #ccc; }
+  .wr-bar { height: 4px; border-radius: 2px; background: #eee; margin-top: 3px; overflow: hidden; }
+  .wr-fill { height: 100%; border-radius: 2px; background: #ccc; transition: width 0.8s ease; }
+  .wr-fill.high { background: #1a7a47; }
+  .team-away .wr-bar { direction: rtl; }
+  .vs { text-align: center; font-size: 11px; color: #ccc; font-weight: 600; }
+
+  .odds { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; border-top: 1px solid #f0f0ec; padding-top: 10px; }
+  .odd { text-align: center; padding: 6px; border-radius: 8px; background: #f8f8f6; }
+  .odd.best { background: #e8f4ee; }
+  .odd-label { font-size: 10px; color: #aaa; margin-bottom: 2px; }
+  .odd-value { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+  .odd.best .odd-value { color: #1a7a47; }
+  .odd-value.dash { color: #ccc; }
+
+  .loading-wrap { text-align: center; padding: 4rem; color: #888; font-size: 14px; }
+  .error-wrap { text-align: center; padding: 3rem; color: #e53935; font-size: 14px; }
+  .empty-wrap { text-align: center; padding: 3rem; color: #888; font-size: 14px; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #eee; border-top-color: #888; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+  .spinner-sm { display: inline-block; width: 14px; height: 14px; border: 2px solid #e8e8e4; border-top-color: #888; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .high-tag { font-size: 11px; color: #1a7a47; margin: 0 2px; }
+  .wr-range { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; }
+  .wr-range input[type=range] { width: 90px; accent-color: #1a1a1a; }
+  .wr-range span { min-width: 30px; font-weight: 600; }
+
+  /* 배당 선택 */
+  .odd { cursor: pointer; transition: all 0.15s; }
+  .odd:hover { background: #f0f0ec; }
+  .odd.selected { background: #1a1a1a !important; }
+  .odd.selected .odd-label { color: #aaa; }
+  .odd.selected .odd-value { color: #fff !important; }
+  .odd-value.dash { cursor: default; }
+
+  /* 조합 패널 */
+  .combo-panel { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 2px solid #1a1a1a; padding: 1rem 1.5rem; display: none; z-index: 100; }
+  .combo-panel.show { display: block; }
+  .combo-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .combo-items { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
+  .combo-item { font-size: 13px; background: #f5f5f0; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px; }
+  .combo-item button { background: none; border: none; cursor: pointer; color: #888; font-size: 14px; line-height: 1; padding: 0; }
+  .combo-result { font-size: 22px; font-weight: 700; white-space: nowrap; }
+  .combo-result span { font-size: 13px; color: #888; font-weight: 400; margin-right: 4px; }
+  .combo-clear { font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚽ 승부식 경기 분석기</h1>
+  <span class="badge" id="round-badge">로딩중...</span>
+</header>
+
+<div class="container" style="padding-bottom: 80px;">
+  <div class="controls">
+    <select id="round-sel" onchange="loadData()">
+      <option value="62">62회차</option>
+      <option value="63">63회차</option>
+      <option value="64" selected>64회차</option>
+      <option value="65">65회차</option>
+    </select>
+    <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
+    <button class="filter-btn" onclick="setFilter('bs',this)">⚾ 야구</button>
+    <button class="filter-btn" onclick="setFilter('sc',this)">⚽ 축구</button>
+    <button class="filter-btn" onclick="setFilter('bk',this)">🏀 농구</button>
+    <button class="filter-btn" onclick="setFilter('vl',this)">🏐 배구</button>
+    <div class="wr-range">
+      <span>승률</span>
+      <input type="range" id="wr-min" min="0" max="100" value="0" step="5" oninput="updateWRFilter()">
+      <span id="wr-min-val">0%</span>
+      <span>~</span>
+      <input type="range" id="wr-max" min="0" max="100" value="100" step="5" oninput="updateWRFilter()">
+      <span id="wr-max-val">100%</span>
+    </div>
+    <select id="sort-sel" onchange="renderGames()">
+      <option value="time">시간순</option>
+      <option value="wr">승률순</option>
+    </select>
+    <button class="reload-btn" onclick="loadData()">🔄 새로고침</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">전체 경기</div><div class="stat-value" id="s-total">-</div></div>
+    <div class="stat"><div class="stat-label">55% 이상 경기</div><div class="stat-value green" id="s-filtered">-</div></div>
+    <div class="stat"><div class="stat-label">평균 홈승 배당</div><div class="stat-value" id="s-avg">-</div></div>
+  </div>
+
+  <div class="ai-status" id="ai-status">
+    <span class="spinner-sm"></span> AI가 팀 승률을 조회하고 있습니다...
+  </div>
+
+  <div id="game-list" class="game-list">
+    <div class="loading-wrap"><span class="spinner"></span>경기 데이터 불러오는 중...</div>
+  </div>
+</div>
+
+<!-- 배당 조합 패널 -->
+<div class="combo-panel" id="combo-panel">
+  <div class="combo-inner">
+    <div class="combo-items" id="combo-items"></div>
+    <div class="combo-result"><span>조합 배당</span><span id="combo-total">-</span></div>
+    <button class="combo-clear" onclick="clearCombo()">초기화</button>
+  </div>
+</div>
+
+<script>
+const API = '';
+const SPORT_LABEL = { bs: '야구', sc: '축구', bk: '농구', vl: '배구' };
+
+let allGames = [];
+let winRateDB = {};
+let normalizedMap = {};
+let currentFilter = 'all';
+let wrMin = 0; let wrMax = 100;
+let selectedOdds = []; // { gameNo, label, odd, teamName }
+
+async function loadData() {
+  const round = document.getElementById('round-sel').value;
+  document.getElementById('game-list').innerHTML = '<div class="loading-wrap"><span class="spinner"></span>와이즈토토에서 경기 데이터 불러오는 중...</div>';
+  document.getElementById('round-badge').textContent = '로딩중...';
+  document.getElementById('round-badge').className = 'badge loading';
+  setAiStatus('loading', 'AI가 팀 승률을 조회하고 있습니다...');
+
+  try {
+    const res = await fetch(`${API}/api/proto?game_round=${round}&game_year=2026`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    allGames = parseGames(html);
+
+    document.getElementById('round-badge').textContent = `${round}회차 · ${allGames.length}경기 · 실시간`;
+    document.getElementById('round-badge').className = 'badge';
+
+    // 경기 목록 먼저 표시 (승률 로딩중 상태로)
+    renderGames();
+
+    // AI 승률 조회
+    await fetchWinRates(round);
+    renderGames();
+  } catch(e) {
+    document.getElementById('game-list').innerHTML = `<div class="error-wrap">❌ 서버 연결 실패: ${e.message}<br><small>node server.js 가 실행중인지 확인해주세요</small></div>`;
+    document.getElementById('round-badge').textContent = '오류';
+    setAiStatus('error', '서버 연결 실패');
+  }
+}
+
+async function fetchWinRates(round) {
+  // 중복 제거한 팀 목록 추출
+  const teamSet = new Map();
+  allGames.forEach(g => {
+    if (g.home) teamSet.set(g.home, { name: g.home, league: g.league, sport: g.sport });
+    if (g.away) teamSet.set(g.away, { name: g.away, league: g.league, sport: g.sport });
+  });
+  const teams = [...teamSet.values()];
+
+  try {
+    const res = await fetch(`${API}/api/winrates`);
+    const data = await res.json();
+    winRateDB = data.winRates || {};
+    normalizedMap = data.normalizedMap || {};
+    setAiStatus('done', `✅ 승률 조회 완료 — ${Object.keys(winRateDB).length}개 팀`);
+  } catch(e) {
+    setAiStatus('error', '⚠️ 승률 조회 실패');
+  }
+}
+
+function setAiStatus(type, msg) {
+  const el = document.getElementById('ai-status');
+  el.className = 'ai-status' + (type === 'done' ? ' done' : type === 'error' ? ' error' : '');
+  el.innerHTML = type === 'loading'
+    ? `<span class="spinner-sm"></span> ${msg}`
+    : msg;
+}
+
+// 승부식 경기 팀명 → 순위 팀명 직접 매핑 테이블
+const TEAM_MAP = {
+  // MLB
+  'LA다저스': 'LA 다저스', '필라필리': '필라델피아 필리스', '뉴욕양키': '뉴욕 양키스',
+  '애슬레틱': '오클랜드 애슬레틱스', '탬파레이': '탬파베이 레이스', '뉴욕메츠': '뉴욕 메츠',
+  '마이말린': '마이애미 말린스', 'LA에인절': 'LA 에인절스', '시카컵스': '시카고 컵스',
+  '애틀브레': '애틀란타 브레이브스', '샌프자이': '샌프란시스코 자이언츠',
+  '휴스애스': '휴스턴 애스트로스', '텍사레인': '텍사스 레인저스',
+  '미네트윈': '미네소타 트윈스', '시카화이': '시카고 화이트삭스',
+  '캔자로얄': '캔자스시티 로열스', '신시레즈': '신시내티 레즈',
+  '밀워브루': '밀워키 브루어스', '워싱내셔': '워싱턴 내셔널스',
+  '볼티오리': '볼티모어 오리올스', '콜로로키': '콜로라도 로키스',
+  '샌디파드': '샌디에이고 파드리스', '애리다이': '애리조나 다이아몬드백스',
+  '시애매리': '시애틀 매리너스', '피츠파이': '피츠버그 파이어리츠',
+  '토론블루': '토론토 블루제이스', '보스레드': '보스턴 레드삭스',
+  '클리가디': '클리블랜드 가디언스', '디트타이': '디트로이트 타이거스',
+  // KBO
+  'KIA': 'KIA 타이거즈', 'LG': 'LG 트윈스', 'SSG': 'SSG 랜더스',
+  'KT': 'kt wiz', 'NC': 'NC 다이노스', '두산': '두산 베어스',
+  '롯데': '롯데 자이언츠', '삼성': '삼성 라이온즈', '키움': '키움 히어로즈',
+  '한화': '한화 이글스',
+  // NPB
+  '요미우리': '요미우리 자이언츠', '한신': '한신 타이거스', '소프트뱅': '소프트뱅크 호크스',
+  '오릭스': '오릭스 버팔로스', '야쿠르트': '도쿄 야쿠르트 스왈로스',
+  '지바롯데': '지바 롯데 마린스', '요코베이': '요코하마 DeNA 베이스타스',
+  '라쿠텐': '도호쿠 라쿠텐 골든이글스', '주니치': '주니치 드래곤스',
+  '히로카프': '히로시마 도요 카프', '한신': '한신 타이거스',
+  '닛폰햄': '홋카이도 닛폰햄 파이터스', '세이부': '사이타마 세이부 라이온스',
+  // NBA
+  '셀틱스': '보스턴 셀틱스', '레이커스': '로스앤젤레스 레이커스',
+  '골든스테': '골든스테이트 워리어스', '밀워키': '밀워키 벅스',
+  '피닉스': '피닉스 선스', '클리블': '클리블랜드 캐벌리어스',
+};
+
+function normalizeKey(name) {
+  return name.replace(/\s+/g, '').toLowerCase();
+}
+
+function getWR(name) {
+  if (!name) return null;
+  // 0. 직접 매핑 테이블 우선 참조
+  const mappedName = TEAM_MAP[name] || TEAM_MAP[name.slice(0,4)] || TEAM_MAP[name.slice(0,3)];
+  if (mappedName && winRateDB[mappedName] !== undefined) return winRateDB[mappedName];
+  // 1. 정확히 매칭
+  if (winRateDB[name] !== undefined) return winRateDB[name];
+  const nk = normalizeKey(name);
+  // 2. 정규화 맵에서 전체 매칭
+  if (normalizedMap[nk] !== undefined) return normalizedMap[nk];
+  // 3. 앞 4글자 매칭
+  if (normalizedMap[nk.slice(0,4)] !== undefined) return normalizedMap[nk.slice(0,4)];
+  // 4. 앞 3글자 매칭
+  if (normalizedMap[nk.slice(0,3)] !== undefined) return normalizedMap[nk.slice(0,3)];
+  // 5. 포함 매칭
+  for (const [k, v] of Object.entries(normalizedMap)) {
+    if (k.length > 3 && (k.includes(nk.slice(0,3)) || nk.includes(k.slice(0,3)))) return v;
+  }
+  return null;
+}
+
+function parseGames(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const uls = doc.querySelectorAll('.gameinfo ul');
+  const games = [];
+
+  uls.forEach(ul => {
+    const no    = ul.querySelector('.a1')?.textContent.trim();
+    const time  = ul.querySelector('.a2')?.textContent.trim();
+    const a3el  = ul.querySelector('[class*="a3"]');
+    const league = ul.querySelector('.a4')?.textContent.trim();
+
+    // 유형 필터: 기본 승부식만 (승①패, SUM, 핸디캡, 언더오버 제외)
+    // d1=승①패, d5=SUM, hm/un에 텍스트 있으면 핸디캡/언더오버
+    const d1 = ul.querySelector('.d1');
+    const d5 = ul.querySelector('.d5');
+    const hmText = ul.querySelector('.hm')?.textContent.trim();
+    const unText = ul.querySelector('.un')?.textContent.trim();
+    if (d1 || d5) return;                    // 승①패, SUM 제외
+    if (hmText && hmText.length > 0) return; // 핸디캡 제외 (H +2.5, h(전반) 등)
+    if (unText && unText.length > 0) return; // 언더오버 제외 (U 9.5 등)
+    // h(전반) 타입 제외 - hm 클래스 안에 span이 있는 경우
+    const hmSpan = ul.querySelector('.hm span');
+    if (hmSpan) return;
+
+    const home = ul.querySelector('.a6 .tn')?.textContent.trim();
+    const away = ul.querySelector('.a8 .tn, .a8 .tnb')?.textContent.trim();
+    const odds = [...ul.querySelectorAll('.a9 .pt')].map(e => e.textContent.trim());
+
+    if (!no || !home || !away) return;
+
+    // 국가대항전 제외 (남자친선INTL, AFC예선, J23백년리그 등)
+    const intlLeagues = ['남축INTL', 'INTL', 'AFC', '여축INTL', 'J23백년'];
+    if (intlLeagues.some(k => (league || '').includes(k))) return;
+
+    // 경기전 상태만 표시 (끝난 경기 제외)
+    const statusTag = ul.querySelector('.tag');
+    const statusText = statusTag?.textContent.trim() || '';
+    if (statusText !== '경기전') return;
+
+    const sport = a3el ? [...a3el.classList].find(c => ['bs','sc','bk','vl'].includes(c)) || 'bs' : 'bs';
+
+    // 배당 파싱: 야구는 무승부 없음 → 배당이 2개면 [홈승, 원정승]
+    let win, draw, lose;
+    if (odds.length === 2) {
+      win = odds[0]; draw = '-'; lose = odds[1];
+    } else {
+      win = odds[0] || '-'; draw = odds[1] || '-'; lose = odds[2] || '-';
+    }
+
+    games.push({
+      no, time, sport, league,
+      home: home.replace(/\s*\d+\s*$/, '').trim(),
+      away: away.replace(/^\s*\d+\s*/, '').trim(),
+      odds: { win, draw, lose },
+    });
+  });
+
+  // 같은 경기(홈팀+원정팀+시간) 중복 제거 → 첫 번째만 유지
+  const seen = new Set();
+  return games.filter(g => {
+    const key = `${g.home}|${g.away}|${g.time}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function updateWRFilter() {
+  wrMin = parseInt(document.getElementById('wr-min').value);
+  wrMax = parseInt(document.getElementById('wr-max').value);
+  document.getElementById('wr-min-val').textContent = wrMin + '%';
+  document.getElementById('wr-max-val').textContent = wrMax + '%';
+  renderGames();
+}
+
+function setFilter(sport, btn) {
+  currentFilter = sport;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGames();
+}
+
+function renderGames() {
+  const filtered = allGames.filter(g => currentFilter === 'all' || g.sport === currentFilter);
+
+  // 승률 적용
+  const withWR = filtered.map(g => ({
+    ...g,
+    homeWR: getWR(g.home),
+    awayWR: getWR(g.away),
+  }));
+
+  // 55% 이상 필터 (승률 데이터 있는 경우만)
+  const qualified = withWR.filter(g =>
+    (g.homeWR !== null && g.homeWR >= 0.55) ||
+    (g.awayWR !== null && g.awayWR >= 0.55)
+  );
+
+  // 승률 범위 필터 적용 (0~100이면 전체)
+  const display = (wrMin === 0 && wrMax === 100) ? withWR :
+    withWR.filter(g => {
+      const hwr = g.homeWR !== null ? g.homeWR * 100 : null;
+      const awr = g.awayWR !== null ? g.awayWR * 100 : null;
+      return (hwr !== null && hwr >= wrMin && hwr <= wrMax) ||
+             (awr !== null && awr >= wrMin && awr <= wrMax);
+    });
+
+  document.getElementById('s-total').textContent = filtered.length;
+  document.getElementById('s-filtered').textContent = qualified.length;
+
+  const avgOdds = allGames.map(g => parseFloat(g.odds.win)).filter(v => !isNaN(v));
+  document.getElementById('s-avg').textContent = avgOdds.length
+    ? (avgOdds.reduce((a,b) => a+b,0) / avgOdds.length).toFixed(2) + '배' : '-';
+
+  if (!display.length) {
+    document.getElementById('game-list').innerHTML = '<div class="empty-wrap">조건에 맞는 경기가 없습니다.</div>';
+    return;
+  }
+
+  // 정렬
+  const sortBy = document.getElementById('sort-sel')?.value || 'time';
+  display.sort((a, b) => {
+    if (sortBy === 'wr') {
+      const ma = Math.max(a.homeWR||0, a.awayWR||0);
+      const mb = Math.max(b.homeWR||0, b.awayWR||0);
+      return mb - ma;
+    } else {
+      // 시간순: "06.01(월) 05:05" 형태 파싱
+      const ta = a.time?.replace(/[^0-9:]/g, '') || '';
+      const tb = b.time?.replace(/[^0-9:]/g, '') || '';
+      return ta.localeCompare(tb);
+    }
+  });
+
+  document.getElementById('game-list').innerHTML = display.map(g => {
+    const hh = g.homeWR !== null && g.homeWR >= 0.55;
+    const ah = g.awayWR !== null && g.awayWR >= 0.55;
+    const wrLoading = g.homeWR === null && g.awayWR === null;
+    const w = parseFloat(g.odds.win), d = parseFloat(g.odds.draw), l = parseFloat(g.odds.lose);
+    const max = Math.max(w||0, d||0, l||0);
+
+    const homeWRText = g.homeWR !== null ? `${(g.homeWR*100).toFixed(1)}%` : '조회중...';
+    const awayWRText = g.awayWR !== null ? `${(g.awayWR*100).toFixed(1)}%` : '조회중...';
+    const homeWRPct = g.homeWR !== null ? g.homeWR*100 : 50;
+    const awayWRPct = g.awayWR !== null ? g.awayWR*100 : 50;
+
+    return `
+    <div class="game-card">
+      <div class="game-meta">
+        <span class="sport-tag sport-${g.sport}">${SPORT_LABEL[g.sport]||g.sport}</span>
+        <span class="game-time">⏰ ${g.time}</span>
+        <span class="league">${g.league} #${g.no}</span>
+      </div>
+      <div class="matchup">
+        <div class="team">
+          <div class="team-name">${hh?'<span class="high-tag">▲</span>':''}${g.home}</div>
+          <div class="win-rate ${hh?'high':wrLoading?'loading':''}">${homeWRText}</div>
+          <div class="wr-bar"><div class="wr-fill ${hh?'high':''}" style="width:${homeWRPct}%"></div></div>
+        </div>
+        <div class="vs">VS</div>
+        <div class="team team-away">
+          <div class="team-name">${g.away}${ah?'<span class="high-tag">▲</span>':''}</div>
+          <div class="win-rate ${ah?'high':wrLoading?'loading':''}">${awayWRText}</div>
+          <div class="wr-bar"><div class="wr-fill ${ah?'high':''}" style="width:${awayWRPct}%"></div></div>
+        </div>
+      </div>
+      <div class="odds">
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_홈승" onclick="toggleOdd('${g.no}','홈승','${g.odds.win}','${g.home}')">
+          <div class="odd-label">홈승</div>
+          <div class="odd-value ${g.odds.win==='-'?'dash':''}">${g.odds.win}</div>
+        </div>
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_무" onclick="toggleOdd('${g.no}','무','${g.odds.draw}','무승부')">
+          <div class="odd-label">무</div>
+          <div class="odd-value ${g.odds.draw==='-'?'dash':''}">${g.odds.draw}</div>
+        </div>
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_원정승" onclick="toggleOdd('${g.no}','원정승','${g.odds.lose}','${g.away}')">
+          <div class="odd-label">원정승</div>
+          <div class="odd-value ${g.odds.lose==='-'?'dash':''}">${g.odds.lose}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleOdd(gameNo, label, odd, teamName) {
+  if (odd === '-' || !odd) return;
+  const key = gameNo + '_' + label;
+  const idx = selectedOdds.findIndex(o => o.key === key);
+  const sameGame = selectedOdds.findIndex(o => o.gameNo === gameNo);
+
+  if (idx >= 0) {
+    // 이미 선택된 배당 → 해제
+    selectedOdds.splice(idx, 1);
+  } else {
+    // 같은 경기에서 다른 배당 선택 → 교체
+    if (sameGame >= 0) selectedOdds.splice(sameGame, 1);
+    selectedOdds.push({ key, gameNo, label, odd: parseFloat(odd), teamName });
+  }
+  updateComboPanel();
+  // 카드 UI 업데이트
+  document.querySelectorAll(`.odd[data-game="${gameNo}"]`).forEach(el => el.classList.remove('selected'));
+  selectedOdds.filter(o => o.gameNo === gameNo).forEach(o => {
+    document.querySelector(`.odd[data-key="${o.key}"]`)?.classList.add('selected');
+  });
+}
+
+function updateComboPanel() {
+  const panel = document.getElementById('combo-panel');
+  const itemsEl = document.getElementById('combo-items');
+  const totalEl = document.getElementById('combo-total');
+
+  if (selectedOdds.length === 0) {
+    panel.classList.remove('show');
+    return;
+  }
+  panel.classList.add('show');
+
+  itemsEl.innerHTML = selectedOdds.map(o => `
+    <div class="combo-item">
+      <span>${o.teamName} ${o.label} <strong>${o.odd}배</strong></span>
+      <button onclick="toggleOdd('${o.gameNo}','${o.label}',${o.odd},'${o.teamName}')">×</button>
+    </div>`).join('');
+
+  const total = selectedOdds.reduce((acc, o) => acc * o.odd, 1);
+  totalEl.textContent = total.toFixed(2) + '배';
+}
+
+function clearCombo() {
+  selectedOdds = [];
+  updateComboPanel();
+  document.querySelectorAll('.odd.selected').forEach(el => el.classList.remove('selected'));
+}
+
+loadData();
+</script>
+</body>
+</html>
