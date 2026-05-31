@@ -8,6 +8,7 @@
     { "src": "/api/proto", "dest": "/api/proto.js" },
     { "src": "/api/winrates", "dest": "/api/winrates.js" },
     { "src": "/api/rounds", "dest": "/api/rounds.js" },
+    { "src": "/api/teamrecord", "dest": "/api/teamrecord.js" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
