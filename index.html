@@ -418,6 +418,8 @@ function renderGames() {
   });
 
   document.getElementById('game-list').innerHTML = display.map(g => {
+    // 팀명에서 특수문자 제거
+    g = {...g, home: g.home.replace(/['"]/g,''), away: g.away.replace(/['"]/g,'')};
     const hh = g.homeWR !== null && g.homeWR >= 0.55;
     const ah = g.awayWR !== null && g.awayWR >= 0.55;
     const wrLoading = g.homeWR === null && g.awayWR === null;
@@ -450,7 +452,7 @@ function renderGames() {
         </div>
       </div>
       <div class="odds">
-        <div class="odd" data-game="${g.no}" data-key="${g.no}_홈승" data-label="홈승" data-odd="${g.odds.win}" data-team="${g.home.replace(/"/g,'&quot;')}">
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_홈승" data-label="홈승" data-odd="${g.odds.win}" data-team="${g.home}">
           <div class="odd-label">홈승</div>
           <div class="odd-value ${g.odds.win==='-'?'dash':''}">${g.odds.win}</div>
         </div>
@@ -458,7 +460,7 @@ function renderGames() {
           <div class="odd-label">무</div>
           <div class="odd-value ${g.odds.draw==='-'?'dash':''}">${g.odds.draw}</div>
         </div>
-        <div class="odd" data-game="${g.no}" data-key="${g.no}_원정승" data-label="원정승" data-odd="${g.odds.lose}" data-team="${g.away.replace(/"/g,'&quot;')}">
+        <div class="odd" data-game="${g.no}" data-key="${g.no}_원정승" data-label="원정승" data-odd="${g.odds.lose}" data-team="${g.away}">
           <div class="odd-label">원정승</div>
           <div class="odd-value ${g.odds.lose==='-'?'dash':''}">${g.odds.lose}</div>
         </div>
