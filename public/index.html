@@ -698,7 +698,6 @@ async function loadRecord(g, side) {
     form: td.form,
   };
 
-  const teamName = side === 'home' ? g.home : g.away;
   const wr = data.winRate !== null ? (data.winRate * 100).toFixed(1) + '%' : '-';
 
   const homeWRText = data.homeWR !== null ? (data.homeWR*100).toFixed(1)+'%' : '-';
