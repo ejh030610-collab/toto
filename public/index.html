@@ -541,6 +541,63 @@ function renderGames() {
   }).join('');
 }
 
+function parseRecordHTML(html, target) {
+  const rawResults = [];
+  // li 태그 파싱
+  const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+  const liItems = [];
+  let liMatch;
+  while ((liMatch = liRegex.exec(html)) !== null) {
+    const text = liMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    liItems.push(text);
+  }
+
+  for (let i = 0; i < liItems.length; i++) {
+    const item = liItems[i];
+    if (!/^\d{4}\.\d{2}\.\d{2}/.test(item)) continue;
+
+    const nextItem = liItems[i + 1] || '';
+    const resultMatch = nextItem.match(/홈승|홈패|홈무|원정승|원정패|원정무/);
+    if (!resultMatch) continue;
+
+    const resultRaw = resultMatch[0];
+    let result = '-';
+    if (target === 'h') {
+      if (resultRaw === '홈승') result = '승';
+      else if (resultRaw === '홈무') result = '무';
+      else if (resultRaw === '홈패') result = '패';
+    } else {
+      if (resultRaw === '원정승') result = '승';
+      else if (resultRaw === '원정무') result = '무';
+      else if (resultRaw === '원정패') result = '패';
+    }
+    if (result === '-') continue;
+
+    // 날짜, 리그 파싱
+    const parts = item.split('|');
+    const dateLeague = parts[0] || '';
+    const dateMatch = dateLeague.match(/(\d{4}\.\d{2}\.\d{2})/);
+    const leagueMatch = dateLeague.match(/\d{2}\.\d{2}\([월화수목금토일]\)\s+[\d:]+\s+(.+)/);
+
+    rawResults.push({
+      date: dateMatch ? dateMatch[1].slice(5) : '',
+      league: leagueMatch ? leagueMatch[1].trim() : '',
+      home: (parts[1] || '').replace(/\*\*/g,'').replace(/\d+\s*$/,'').trim(),
+      score: '',
+      away: (parts[3] || '').replace(/\*\*/g,'').replace(/^\s*\d+/,'').trim(),
+      result,
+    });
+
+    if (rawResults.length >= 10) break;
+  }
+
+  const wins   = rawResults.filter(r => r.result === '승').length;
+  const draws  = rawResults.filter(r => r.result === '무').length;
+  const losses = rawResults.filter(r => r.result === '패').length;
+  const total  = wins + draws + losses;
+  return { wins, draws, losses, total, winRate: total > 0 ? parseFloat((wins/total).toFixed(3)) : null, rawResults };
+}
+
 function clickOdd(gameNo, label, odd, team) {
   if (!odd || odd === '-') return;
   const key = gameNo + '_' + label;
@@ -621,8 +678,20 @@ async function loadRecord(g, side) {
 
   if (!data) {
     try {
-      const res = await fetch(`${API}/api/teamrecord?home_seq=${g.homeSeq}&away_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${side === 'home' ? 'h' : 'a'}`);
+      // 먼저 Vercel API 시도
+      const target = side === 'home' ? 'h' : 'a';
+      let res = await fetch(`${API}/api/teamrecord?home_seq=${g.homeSeq}&away_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${target}`);
       data = await res.json();
+
+      // 데이터 없으면 CORS 프록시로 직접 시도
+      if (!data.total || data.total === 0) {
+        const wisetotoUrl = `https://www.wisetoto.com/gameinfo/team_record.htm?game_category=pt1&home_team_info_seq=${g.homeSeq}&away_team_info_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${target}&type=all&list_num=10`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(wisetotoUrl)}`;
+        const proxyRes = await fetch(proxyUrl);
+        const proxyData = await proxyRes.json();
+        data = parseRecordHTML(proxyData.contents, target);
+      }
+
       recordCache[cacheKey] = data;
     } catch(e) {
       document.getElementById('modal-body').innerHTML = '<div class="record-loading">전적 조회 실패</div>';
