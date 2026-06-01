@@ -238,7 +238,8 @@ let currentFilter = 'all';
 let wrMin = 0;
 let wrMax = 100;
 let selectedOdds = [];
-let recordCache = {}; // 팀 전적 캐시
+let recordCache = {};
+let teamData = {}; // 팀 상세 데이터 (홈/원정 승률, 폼)
 let currentModal = null; // 현재 팝업 경기
 
 // 팀명 매핑
@@ -269,6 +270,19 @@ const TEAM_MAP = {
 };
 
 function normalizeKey(n) { return n.replace(/\s+/g,'').toLowerCase(); }
+
+function getTeamData(name) {
+  if (!name) return null;
+  // 직접 매핑
+  const mapped = TEAM_MAP[name] || TEAM_MAP[name.slice(0,4)] || TEAM_MAP[name.slice(0,3)];
+  const lookupName = mapped || name;
+  if (teamData[lookupName]) return teamData[lookupName];
+  // 정규화 맵에서 찾기
+  const nk = normalizeKey(lookupName);
+  const nm = normalizedMap[nk] || normalizedMap[nk.slice(0,4)] || normalizedMap[nk.slice(0,3)];
+  if (nm) return teamData[nm.name] || nm;
+  return null;
+}
 
 function getWRByGame(g, side) {
   // 국가대항전은 전적 캐시 우선
@@ -342,6 +356,7 @@ async function fetchWinRates() {
     const data = await res.json();
     winRateDB = data.winRates || {};
     normalizedMap = data.normalizedMap || {};
+    teamData = data.teamData || {};
     setAiStatus('done', `✅ 승률 조회 완료 — ${Object.keys(winRateDB).length}개 팀`);
   } catch(e) {
     setAiStatus('error', '⚠️ 승률 조회 실패');
@@ -667,69 +682,49 @@ async function switchTab(side) {
 }
 
 async function loadRecord(g, side) {
-  if (!g.homeSeq || !g.awaySeq) {
-    document.getElementById('modal-body').innerHTML = '<div class="record-loading">전적 데이터 없음</div>';
+  document.getElementById('modal-body').innerHTML = '<div class="record-loading"><span class="spinner"></span> 데이터 불러오는 중...</div>';
+  const teamName = side === 'home' ? g.home : g.away;
+  const td = getTeamData(teamName);
+
+  if (!td) {
+    document.getElementById('modal-body').innerHTML = '<div class="record-loading">데이터 없음</div>';
     return;
   }
-  document.getElementById('modal-body').innerHTML = '<div class="record-loading"><span class="spinner"></span> 전적 불러오는 중...</div>';
 
-  const cacheKey = `${g.homeSeq}_${g.awaySeq}_${side}`;
-  let data = recordCache[cacheKey];
-
-  if (!data) {
-    try {
-      // 먼저 Vercel API 시도
-      const target = side === 'home' ? 'h' : 'a';
-      let res = await fetch(`${API}/api/teamrecord?home_seq=${g.homeSeq}&away_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${target}`);
-      data = await res.json();
-
-      // 데이터 없으면 CORS 프록시로 직접 시도
-      if (!data.total || data.total === 0) {
-        const wisetotoUrl = `https://www.wisetoto.com/gameinfo/team_record.htm?game_category=pt1&home_team_info_seq=${g.homeSeq}&away_team_info_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${target}&type=all&list_num=10`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(wisetotoUrl)}`;
-        const proxyRes = await fetch(proxyUrl);
-        const proxyData = await proxyRes.json();
-        data = parseRecordHTML(proxyData.contents, target);
-      }
-
-      recordCache[cacheKey] = data;
-    } catch(e) {
-      document.getElementById('modal-body').innerHTML = '<div class="record-loading">전적 조회 실패</div>';
-      return;
-    }
-  }
+  const data = {
+    winRate: td.winRate,
+    homeWR: td.homeWR,
+    awayWR: td.awayWR,
+    form: td.form,
+  };
 
   const teamName = side === 'home' ? g.home : g.away;
   const wr = data.winRate !== null ? (data.winRate * 100).toFixed(1) + '%' : '-';
 
+  const homeWRText = data.homeWR !== null ? (data.homeWR*100).toFixed(1)+'%' : '-';
+  const awayWRText = data.awayWR !== null ? (data.awayWR*100).toFixed(1)+'%' : '-';
+  const formHTML = data.form && data.form.length > 0
+    ? data.form.map(r => `<span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;font-size:12px;font-weight:600;margin:2px;background:${r==='승'?'#e8f4ee':r==='무'?'#f5f5f0':'#fde8e8'};color:${r==='승'?'#1a7a47':r==='무'?'#888':'#e53935'}">${r}</span>`).join('')
+    : '<span style="color:#aaa;font-size:13px">데이터 없음</span>';
+
   document.getElementById('modal-body').innerHTML = `
     <div class="record-summary">
       <div class="record-stat">
-        <div class="record-stat-label">승률</div>
+        <div class="record-stat-label">전체 승률</div>
         <div class="record-stat-value green">${wr}</div>
       </div>
       <div class="record-stat">
-        <div class="record-stat-label">승</div>
-        <div class="record-stat-value">${data.wins}</div>
+        <div class="record-stat-label">홈 승률</div>
+        <div class="record-stat-value">${homeWRText}</div>
       </div>
       <div class="record-stat">
-        <div class="record-stat-label">무</div>
-        <div class="record-stat-value">${data.draws}</div>
-      </div>
-      <div class="record-stat">
-        <div class="record-stat-label">패</div>
-        <div class="record-stat-value">${data.losses}</div>
+        <div class="record-stat-label">원정 승률</div>
+        <div class="record-stat-value">${awayWRText}</div>
       </div>
     </div>
-    <div style="font-size:12px; color:#888; margin-bottom:8px;">최근 ${data.total}경기 기준</div>
-    <div class="record-list">
-      ${(data.rawResults||[]).map(r => `
-        <div class="record-item">
-          <span class="record-date">${r.date}</span>
-          <span class="record-league">${r.league}</span>
-          <span class="record-teams">${r.home} ${r.score} ${r.away}</span>
-          <span class="record-result ${r.result==='승'?'result-win':r.result==='무'?'result-draw':'result-loss'}">${r.result}</span>
-        </div>`).join('')}
+    <div style="margin-top:1rem;">
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">최근 폼</div>
+      <div>${formHTML}</div>
     </div>`;
 }
 
