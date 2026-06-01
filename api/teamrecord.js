@@ -18,48 +18,70 @@ module.exports = async (req, res) => {
     });
     const html = await response.text();
 
-    // 테이블 행 파싱
     const rawResults = [];
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let rowMatch;
 
-    while ((rowMatch = rowRegex.exec(html)) !== null) {
-      const row = rowMatch[1];
-      const cells = [];
-      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-      let cellMatch;
-      while ((cellMatch = cellRegex.exec(row)) !== null) {
-        cells.push(cellMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+    // <tr> 행 파싱
+    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let trMatch;
+    while ((trMatch = trRegex.exec(html)) !== null) {
+      const rowHtml = trMatch[1];
+      // td 텍스트 추출
+      const tds = [];
+      const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let tdMatch;
+      while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+        const text = tdMatch[1]
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        tds.push(text);
       }
 
-      // 날짜 패턴으로 경기 행 감지
-      if (cells.length >= 5 && /\d{4}\.\d{2}\.\d{2}/.test(cells[0])) {
-        const dateMatch = cells[0].match(/(\d{4}\.\d{2}\.\d{2})/);
-        const date = dateMatch ? dateMatch[1].slice(5) : cells[0].slice(0,10);
-        const league = cells[1] || '';
-        const homeTeam = cells[2] || '';
-        const score = cells[3] || '';
-        const awayTeam = cells[4] || '';
-        const resultRaw = cells[cells.length - 2] || '';
+      // 날짜 패턴 있는 행만 처리
+      if (tds.length < 4 || !/^\d{4}\.\d{2}\.\d{2}/.test(tds[0])) continue;
 
-        let result = '-';
-        if (target === 'h') {
-          if (resultRaw === '홈승') result = '승';
-          else if (resultRaw === '홈무') result = '무';
-          else if (resultRaw === '홈패') result = '패';
-        } else {
-          if (resultRaw === '원정승') result = '승';
-          else if (resultRaw === '원정무') result = '무';
-          else if (resultRaw === '원정패') result = '패';
-        }
+      // 결과 찾기 (홈승/홈패/홈무/원정승/원정패/원정무)
+      const resultCell = tds.find(t => /홈승|홈패|홈무|원정승|원정패|원정무/.test(t));
+      if (!resultCell) continue;
 
-        if (result !== '-') {
-          rawResults.push({ date, league, home: homeTeam, score, away: awayTeam, result });
-        }
+      const resultMatch = resultCell.match(/홈승|홈패|홈무|원정승|원정패|원정무/);
+      const resultRaw = resultMatch ? resultMatch[0] : '';
+
+      let result = '-';
+      if (target === 'h') {
+        if (resultRaw === '홈승') result = '승';
+        else if (resultRaw === '홈무') result = '무';
+        else if (resultRaw === '홈패') result = '패';
+      } else {
+        if (resultRaw === '원정승') result = '승';
+        else if (resultRaw === '원정무') result = '무';
+        else if (resultRaw === '원정패') result = '패';
       }
+      if (result === '-') continue;
+
+      // 날짜, 리그, 홈팀, 스코어, 원정팀 파싱
+      const dateStr = tds[0].slice(0, 10).replace(/\.\d+\(.*?\)/, '').trim();
+      const league = tds[1] || '';
+      // 홈팀명 (볼드 제거)
+      const homeTeam = tds[2]?.replace(/\*\*/g,'').trim() || '';
+      // 스코어: "숫자 : 숫자" 패턴
+      const scoreCell = tds.find(t => /\d\s*:\s*\d/.test(t)) || '';
+      const score = scoreCell.match(/(\d)\s*:\s*(\d)/)?.[0] || '';
+      const awayTeam = tds[4]?.replace(/\*\*/g,'').trim() || '';
+
+      rawResults.push({
+        date: tds[0].slice(0,10),
+        league,
+        home: homeTeam,
+        score,
+        away: awayTeam,
+        result,
+      });
+
+      if (rawResults.length >= 10) break;
     }
 
-    // 승/무/패 집계
     const wins   = rawResults.filter(r => r.result === '승').length;
     const draws  = rawResults.filter(r => r.result === '무').length;
     const losses = rawResults.filter(r => r.result === '패').length;
