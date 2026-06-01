@@ -18,33 +18,55 @@ module.exports = async (req, res) => {
     });
     const html = await response.text();
 
-    // 결과 파싱: 홈승/무/원정승 카운트
-    // "홈승", "홈패", "홈무", "원정승", "원정패", "원정무" 패턴
-    const results = [];
-    const rowRegex = /홈승|홈패|홈무|원정승|원정패|원정무/g;
-    let m;
-    while ((m = rowRegex.exec(html)) !== null) {
-      results.push(m[0]);
+    // 테이블 행 파싱
+    const rawResults = [];
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+
+    while ((rowMatch = rowRegex.exec(html)) !== null) {
+      const row = rowMatch[1];
+      const cells = [];
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let cellMatch;
+      while ((cellMatch = cellRegex.exec(row)) !== null) {
+        cells.push(cellMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+      }
+
+      // 날짜 패턴으로 경기 행 감지
+      if (cells.length >= 5 && /\d{4}\.\d{2}\.\d{2}/.test(cells[0])) {
+        const dateMatch = cells[0].match(/(\d{4}\.\d{2}\.\d{2})/);
+        const date = dateMatch ? dateMatch[1].slice(5) : cells[0].slice(0,10);
+        const league = cells[1] || '';
+        const homeTeam = cells[2] || '';
+        const score = cells[3] || '';
+        const awayTeam = cells[4] || '';
+        const resultRaw = cells[cells.length - 2] || '';
+
+        let result = '-';
+        if (target === 'h') {
+          if (resultRaw === '홈승') result = '승';
+          else if (resultRaw === '홈무') result = '무';
+          else if (resultRaw === '홈패') result = '패';
+        } else {
+          if (resultRaw === '원정승') result = '승';
+          else if (resultRaw === '원정무') result = '무';
+          else if (resultRaw === '원정패') result = '패';
+        }
+
+        if (result !== '-') {
+          rawResults.push({ date, league, home: homeTeam, score, away: awayTeam, result });
+        }
+      }
     }
 
-    // target 기준으로 승/무/패 계산
-    let wins = 0, draws = 0, losses = 0;
-    results.forEach(r => {
-      if (target === 'h') {
-        if (r === '홈승') wins++;
-        else if (r === '홈무') draws++;
-        else if (r === '홈패') losses++;
-      } else {
-        if (r === '원정승') wins++;
-        else if (r === '원정무') draws++;
-        else if (r === '원정패') losses++;
-      }
-    });
-
-    const total = wins + draws + losses;
+    // 승/무/패 집계
+    const wins   = rawResults.filter(r => r.result === '승').length;
+    const draws  = rawResults.filter(r => r.result === '무').length;
+    const losses = rawResults.filter(r => r.result === '패').length;
+    const total  = wins + draws + losses;
     const winRate = total > 0 ? parseFloat((wins / total).toFixed(3)) : null;
 
-    res.json({ wins, draws, losses, total, winRate, results: results.slice(0, 10) });
+    res.json({ wins, draws, losses, total, winRate, rawResults });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
