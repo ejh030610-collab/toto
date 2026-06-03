@@ -568,17 +568,17 @@ function renderGames() {
       </div>
       <div class="odds">
         <div class="odd ${selWin?'selected':''} ${g.odds.win==='-'?'disabled':''}"
-             onclick="clickOdd('${g.no}','홈승','${g.odds.win}','${g.home}')">
+             onclick="event.stopPropagation();clickOdd('${g.no}','홈승','${g.odds.win}','${g.home}')">
           <div class="odd-label">홈승</div>
           <div class="odd-value ${g.odds.win==='-'?'dash':''}">${g.odds.win}</div>
         </div>
         <div class="odd ${selDraw?'selected':''} ${g.odds.draw==='-'?'disabled':''}"
-             onclick="clickOdd('${g.no}','무','${g.odds.draw}','무승부')">
+             onclick="event.stopPropagation();clickOdd('${g.no}','무','${g.odds.draw}','무승부')">
           <div class="odd-label">무</div>
           <div class="odd-value ${g.odds.draw==='-'?'dash':''}">${g.odds.draw}</div>
         </div>
         <div class="odd ${selLose?'selected':''} ${g.odds.lose==='-'?'disabled':''}"
-             onclick="clickOdd('${g.no}','원정승','${g.odds.lose}','${g.away}')">
+             onclick="event.stopPropagation();clickOdd('${g.no}','원정승','${g.odds.lose}','${g.away}')">
           <div class="odd-label">원정승</div>
           <div class="odd-value ${g.odds.lose==='-'?'dash':''}">${g.odds.lose}</div>
         </div>
