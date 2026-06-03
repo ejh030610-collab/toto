@@ -208,10 +208,17 @@
       <span class="modal-title" id="modal-title">전적</span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="modal-tabs">
-      <div class="modal-tab active" id="tab-home" onclick="switchTab('home')">홈팀</div>
-      <div class="modal-tab" id="tab-away" onclick="switchTab('away')">원정팀</div>
-      <div class="modal-tab" id="tab-record" style="color:#888;font-size:12px" onclick="openWisetotoRecord()">📋 상세전적</div>
+    <div class="modal-tabs" style="display:flex;border-bottom:1px solid #f0f0ec;padding:0 8px;gap:4px;">
+      <div class="modal-tab active" id="tab-home" onclick="switchTab('home')" style="flex:1">홈팀</div>
+      <button id="btn-record-home" onclick="openWisetotoRecord('home')"
+        style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #ddd;background:#f8f8f6;cursor:pointer;color:#888;margin:auto 0">
+        📋 홈전적
+      </button>
+      <div class="modal-tab" id="tab-away" onclick="switchTab('away')" style="flex:1">원정팀</div>
+      <button id="btn-record-away" onclick="openWisetotoRecord('away')"
+        style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #ddd;background:#f8f8f6;cursor:pointer;color:#888;margin:auto 0">
+        📋 원정전적
+      </button>
     </div>
     <div class="modal-body" id="modal-body">
       <div class="record-loading"><span class="spinner"></span> 전적 불러오는 중...</div>
@@ -718,6 +725,8 @@ async function openModal(gameNo) {
   document.getElementById('modal-overlay').classList.add('show');
   document.getElementById('tab-home').textContent = g.home;
   document.getElementById('tab-away').textContent = g.away;
+  document.getElementById('btn-record-home').title = `${g.home} 전적 보기`;
+  document.getElementById('btn-record-away').title = `${g.away} 전적 보기`;
   document.getElementById('tab-home').classList.add('active');
   document.getElementById('tab-away').classList.remove('active');
   document.getElementById('tab-home').onclick = () => switchTab('home');
@@ -726,15 +735,14 @@ async function openModal(gameNo) {
   await loadRecord(g, 'home');
 }
 
-function openWisetotoRecord() {
+function openWisetotoRecord(side) {
   if (!currentModal) return;
   const g = currentModal;
+  const target = side === 'away' ? 'a' : 'h';
   if (g.homeSeq && g.awaySeq) {
-    // team_record.htm 직접 열기
-    const url = `https://www.wisetoto.com/gameinfo/team_record.htm?game_category=pt1&home_team_info_seq=${g.homeSeq}&away_team_info_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=h&type=all&list_num=10`;
+    const url = `https://www.wisetoto.com/gameinfo/team_record.htm?game_category=pt1&home_team_info_seq=${g.homeSeq}&away_team_info_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${target}&type=all&list_num=10`;
     window.open(url, '_blank');
   } else {
-    // focus 파라미터로 메인 페이지 열기
     window.open(`https://www.wisetoto.com/index.htm?tab_type=proto&game_type=pt&game_category=pt1`, '_blank');
   }
 }
