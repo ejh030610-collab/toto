@@ -107,7 +107,11 @@ async function fetchLeagueData(sport, leagueSeq) {
         }
       }
 
-      teams[teamName] = { winRate, wins, draws, losses, streak, form, homeWR, awayWR };
+      // 팀명 정규화
+      const normalizedName = teamName
+        .replace(/^kt wiz$/i, 'KT 위즈')
+        .replace(/^kia$/i, 'KIA 타이거즈');
+      teams[normalizedName] = { winRate, wins, draws, losses, streak, form, homeWR, awayWR };
     }
     return teams;
   } catch (err) {

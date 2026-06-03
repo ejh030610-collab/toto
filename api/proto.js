@@ -1,16 +1,7 @@
 const fetch = require('node-fetch');
 
-// seq를 와이즈토토에서 동적으로 가져오기
 async function getSeq(game_round) {
-  // 하드코딩 백업 맵 (API 실패시 사용)
-  const SEQ_MAP = {
-    '61':'30901','62':'30947','63':'30993',
-    '64':'31028','65':'31085','66':'31131',
-    '67':'31177','68':'31223','69':'31269','70':'31315',
-  };
-  if (SEQ_MAP[game_round]) return SEQ_MAP[game_round];
-
-  // 와이즈토토에서 동적으로 찾기
+  // 1. rounds API에서 동적으로 가져오기
   try {
     const res = await fetch('https://www.wisetoto.com/index.htm?tab_type=proto&game_type=pt&game_category=pt1', {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.wisetoto.com/' },
@@ -19,13 +10,26 @@ async function getSeq(game_round) {
     const regex = new RegExp(`get_gameinfo_body\\('proto','pt1','\\d+','${game_round}','','','(\\d+)'`);
     const m = html.match(regex);
     if (m) return m[1];
+
+    // 현재 회차 주변 seqMap 전체 파싱
+    const seqRegex = /get_gameinfo_body\('proto','pt1','\d+','(\d+)','','','(\d+)'/g;
+    let sm;
+    while ((sm = seqRegex.exec(html)) !== null) {
+      if (sm[1] === String(game_round)) return sm[2];
+    }
   } catch(e) {}
-  return null;
+
+  // 2. 하드코딩 백업
+  const SEQ_MAP = {
+    '61':'30901','62':'30947','63':'30993','64':'31028','65':'31029',
+    '66':'31085','67':'31131','68':'31177','69':'31223','70':'31269',
+  };
+  return SEQ_MAP[game_round] || null;
 }
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  const { game_round = '64', game_year = '2026', sports = '', sort = '' } = req.query;
+  const { game_round = '65', game_year = '2026', sports = '', sort = '' } = req.query;
 
   const seq = await getSeq(game_round);
   if (!seq) return res.status(400).json({ error: `${game_round}회차 seq를 찾을 수 없습니다.` });
