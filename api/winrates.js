@@ -107,10 +107,18 @@ async function fetchLeagueData(sport, leagueSeq) {
         }
       }
 
-      // 팀명 정규화
-      const normalizedName = teamName
-        .replace(/^kt wiz$/i, 'KT 위즈')
-        .replace(/^kia$/i, 'KIA 타이거즈');
+      // 팀명 정규화 (순위페이지 팀명 → 경기목록 팀명과 매핑되도록)
+      const NAME_FIX = {
+        'kt wiz': 'KT 위즈', 'KT wiz': 'KT 위즈',
+        '한신 타이거스': '한신 타이거즈',
+        '요코하마 DeNA 베이스타스': '요코하마 DeNA 베이스타즈',
+        '홋카이도 닛폰햄 파이터스': '닛폰햄 파이터스',
+        '사이타마 세이부 라이온스': '세이부 라이온스',
+        '도호쿠 라쿠텐 골든이글스': '라쿠텐 골든이글스',
+        '도쿄 야쿠르트 스왈로스': '도쿄 야쿠르트 스왈로스',
+        '히로시마 도요 카프': '히로시마 도요 카프',
+      };
+      const normalizedName = NAME_FIX[teamName] || teamName;
       teams[normalizedName] = { winRate, wins, draws, losses, streak, form, homeWR, awayWR };
     }
     return teams;
