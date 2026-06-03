@@ -743,6 +743,7 @@ async function loadRecord(g, side) {
   };
 
   // 과거 회차 데이터로 최근 10경기 승패 조회 (먼저 실행)
+  let rawResults = [];
   let recentRecord = null;
   try {
     const round = document.getElementById('round-sel')?.value || '65';
