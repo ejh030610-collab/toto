@@ -25,48 +25,67 @@ async function fetchLeagueData(sport, leagueSeq) {
         const text = cellMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
         cells.push(text);
       }
-      if (cells.length < 3) continue;
+      if (cells.length < 4) continue;
 
-      // 승률 찾기
-      let teamName = null, winRate = null, winRateIdx = -1;
-      for (let i = 0; i < cells.length; i++) {
+      // 첫 셀이 순위(숫자)인 행만 처리
+      if (!/^\d+$/.test(cells[0])) continue;
+
+      // 팀명: 두번째 셀 (한글/영문 포함, 숫자 아님)
+      let teamName = cells[1] ? cells[1].replace(/\(.*?\)/g, '').trim() : null;
+      if (!teamName || /^\d/.test(teamName) || teamName.length < 2) continue;
+
+      // 명시적 승률 (0.xxx)
+      let winRate = null, winRateIdx = -1;
+      for (let i = 2; i < cells.length; i++) {
         if (/^[01]\.\d{3}$/.test(cells[i])) {
           winRate = parseFloat(cells[i]);
           winRateIdx = i;
-          for (let j = i - 1; j >= 0; j--) {
-            if (cells[j] && !/^\d+$/.test(cells[j]) && cells[j].length > 1) {
-              teamName = cells[j].replace(/\(.*?\)/g, '').trim();
-              break;
-            }
-          }
           break;
         }
       }
-      if (!teamName || winRate === null) continue;
 
-      // 승/무/패 파싱 (winRateIdx 앞에 있는 숫자들)
+      // 승/무/패 추출 (순위, 팀명, 경기수 이후의 숫자들)
+      const nums = [];
+      for (let i = 2; i < cells.length; i++) {
+        if (/^\d+$/.test(cells[i])) nums.push({ idx: i, val: parseInt(cells[i]) });
+      }
+      // 보통 [경기수, 승, 무, 패] 순서 → 경기수 제외하고 승/무/패
       let wins = null, draws = null, losses = null;
-      const numCells = cells.slice(0, winRateIdx).filter(c => /^\d+$/.test(c));
-      if (numCells.length >= 3) {
-        wins   = parseInt(numCells[numCells.length - 3]);
-        draws  = parseInt(numCells[numCells.length - 2]);
-        losses = parseInt(numCells[numCells.length - 1]);
+      if (nums.length >= 4) {
+        // 경기수 다음 3개가 승/무/패
+        wins   = nums[1].val;
+        draws  = nums[2].val;
+        losses = nums[3].val;
+      } else if (nums.length === 3) {
+        // 무승부 없는 경우 [경기수, 승, 패]
+        wins   = nums[1].val;
+        draws  = 0;
+        losses = nums[2].val;
       }
 
-      // 연속 결과 (2L, 4W, W1, L2 등 다양한 형식)
+      // 승률 없으면 승/무/패로 계산
+      if (winRate === null && wins !== null) {
+        const total = wins + losses;  // 무승부 제외한 승패
+        if (total > 0) winRate = parseFloat((wins / total).toFixed(3));
+      }
+      if (winRate === null) continue;
+
+      // 연속 결과 (3승, 9패, 2L, 4W, W1, L2 등)
       let streak = null;
-      for (let i = winRateIdx + 1; i < cells.length; i++) {
-        if (/^[WL]\d+$/.test(cells[i])) { streak = cells[i]; break; }
-        if (/^\d+[WL]$/.test(cells[i])) {
-          // 4W → W4 형식으로 변환
-          const num = cells[i].match(/\d+/)[0];
-          const type = cells[i].match(/[WL]/)[0];
-          streak = type + num;
-          break;
+      for (let i = cells.length - 1; i >= 2; i--) {
+        const c = cells[i];
+        if (/^\d+[승패]$/.test(c)) {
+          const num = c.match(/\d+/)[0];
+          const type = c.includes('승') ? 'W' : 'L';
+          streak = type + num; break;
+        }
+        if (/^[WL]\d+$/.test(c)) { streak = c; break; }
+        if (/^\d+[WL]$/.test(c)) {
+          streak = c.match(/[WL]/)[0] + c.match(/\d+/)[0]; break;
         }
       }
 
-      // 최근 5경기 폼 파싱 (승 패 무 패 승 패턴)
+      // 최근 5경기 폼
       let form = null;
       for (let i = cells.length - 1; i >= 0; i--) {
         if (/^[승패무\s]+$/.test(cells[i]) && cells[i].replace(/\s/g,'').length >= 3) {
@@ -75,14 +94,16 @@ async function fetchLeagueData(sport, leagueSeq) {
         }
       }
 
-      // 홈/원정 승률
+      // 홈/원정 승률 (명시적 승률 뒤에 추가 0.xxx가 있으면)
       let homeWR = null, awayWR = null;
-      let wrCount = 0;
-      for (let i = winRateIdx + 1; i < cells.length; i++) {
-        if (/^[01]\.\d{3}$/.test(cells[i])) {
-          wrCount++;
-          if (wrCount === 1) homeWR = parseFloat(cells[i]);
-          if (wrCount === 2) { awayWR = parseFloat(cells[i]); break; }
+      if (winRateIdx >= 0) {
+        let wrCount = 0;
+        for (let i = winRateIdx + 1; i < cells.length; i++) {
+          if (/^[01]\.\d{3}$/.test(cells[i])) {
+            wrCount++;
+            if (wrCount === 1) homeWR = parseFloat(cells[i]);
+            if (wrCount === 2) { awayWR = parseFloat(cells[i]); break; }
+          }
         }
       }
 
