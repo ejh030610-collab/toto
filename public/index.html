@@ -219,6 +219,12 @@
   </div>
 </div>
 
+<!-- 맨 위로 버튼 -->
+<button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})"
+  style="position:fixed;bottom:90px;right:20px;width:44px;height:44px;border-radius:50%;
+         background:#1a1a1a;color:#fff;border:none;font-size:18px;cursor:pointer;
+         display:none;z-index:99;box-shadow:0 2px 8px rgba(0,0,0,0.3);line-height:1">↑</button>
+
 <!-- 배당 조합 패널 -->
 <div class="combo-panel" id="combo-panel">
   <div class="combo-inner">
@@ -292,6 +298,18 @@ const TEAM_MAP = {
   '셀틱스':'보스턴 셀틱스','레이커스':'LA 레이커스',
   '골든스테':'골든스테이트 워리어스','밀워키벅':'밀워키 벅스',
   '피닉스':'피닉스 선즈','클리블랜':'클리블랜드 캐벌리어스',
+  '샌안스퍼':'샌안토니오 스퍼스','뉴욕닉스':'뉴욕 닉스',
+  '덴버너게':'덴버 너게츠','미네팀버':'미네소타 팀버울브스',
+  '오클썬더':'오클라호마 시티 썬더','휴스로켓':'휴스턴 로켓츠',
+  '달매버릭':'댈러스 매버릭스','멤그리즐':'멤피스 그리즐리스',
+  '뉴올펠리':'뉴올리언스 펠리컨스','포트블레':'포틀랜드 트레일블레이저스',
+  '유타재즈':'유타 재즈','새크킹스':'새크라멘토 킹스',
+  'LA클리퍼':'LA 클리퍼스','인디페이':'인디애나 페이서스',
+  '브루네츠':'브루클린 네츠','시불스':'시카고 불스',
+  '디트피스':'디트로이트 피스톤스','샬호네츠':'샬럿 호네츠',
+  '올매직':'올랜도 매직','애호크스':'애틀란타 호크스',
+  '마히트':'마이애미 히트','워위저즈':'워싱턴 위저즈',
+  '필세븐':'필라델피아 세븐티식서스','토랩터':'토론토 랩터스',
   // KBL
   '창원LG':'창원 LG 세이커스','정관장':'안양 정관장 레드부스터스',
   '원주DB':'원주 DB 프로미','서울SK':'서울 SK 나이츠',
@@ -339,6 +357,12 @@ function getWR(name) {
   }
   return null;
 }
+
+// 맨 위로 버튼 스크롤 감지
+window.addEventListener('scroll', () => {
+  const btn = document.getElementById('scroll-top');
+  if (btn) btn.style.display = window.scrollY > 300 ? 'block' : 'none';
+});
 
 async function initRounds() {
   try {
@@ -696,6 +720,8 @@ async function openModal(gameNo) {
   document.getElementById('tab-away').textContent = g.away;
   document.getElementById('tab-home').classList.add('active');
   document.getElementById('tab-away').classList.remove('active');
+  document.getElementById('tab-home').onclick = () => switchTab('home');
+  document.getElementById('tab-away').onclick = () => switchTab('away');
 
   await loadRecord(g, 'home');
 }
