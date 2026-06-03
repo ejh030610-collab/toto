@@ -223,7 +223,7 @@ function buildNormalizedMap(teamData) {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   try {
-    const [mlbData, kboData, npbData, nbaData, kblData, scData, vlData, vlNationsData, nationalData] = await Promise.all([
+    const [mlbData, kboData, npbData, nbaData, kblData, scData, vlData, vlWNationsData, vlMNationsData, nationalData] = await Promise.all([
       fetchLeagueData('bs', '40'),    // MLB
       fetchLeagueData('bs', '39'),    // KBO
       fetchLeagueData('bs', '159'),   // NPB
@@ -231,11 +231,12 @@ module.exports = async (req, res) => {
       fetchLeagueData('bk'),           // KBL (기본값)
       fetchLeagueData('sc'),           // 축구
       fetchLeagueData('vl', '254'),   // KOVO 남자배구
-      fetchLeagueData('vl', '282'),   // 여자 네이션스리그 (세계대회)
+      fetchLeagueData('vl', '282'),   // 여자 네이션스리그
+      fetchLeagueData('vl', '283'),   // 남자 네이션스리그
       fetchNationalData(),
     ]);
     const fifaData = getFifaData();
-    const allTeams = { ...fifaData, ...nationalData, ...scData, ...mlbData, ...kboData, ...npbData, ...nbaData, ...kblData, ...vlData, ...vlNationsData };
+    const allTeams = { ...fifaData, ...nationalData, ...scData, ...mlbData, ...kboData, ...npbData, ...nbaData, ...kblData, ...vlData, ...vlWNationsData, ...vlMNationsData };
 
     const winRates = {};
     for (const [name, data] of Object.entries(allTeams)) {
