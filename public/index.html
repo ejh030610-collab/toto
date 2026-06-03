@@ -742,17 +742,27 @@ async function loadRecord(g, side) {
     form: td.form,
   };
 
-  const wr = data.winRate !== null ? (data.winRate * 100).toFixed(1) + '%' : '-';
+  // 과거 회차 데이터로 최근 10경기 승패 조회 (먼저 실행)
+  let recentRecord = null;
+  try {
+    const round = document.getElementById('round-sel')?.value || '65';
+    const recRes = await fetch(`${API}/api/teamrecord?team=${encodeURIComponent(teamName)}&current_round=${round}`);
+    recentRecord = await recRes.json();
+    if (recentRecord.total > 0 && recentRecord.streak) {
+      data.streak = recentRecord.streak;
+    }
+  } catch(e) {}
 
+  const wr = data.winRate !== null ? (data.winRate * 100).toFixed(1) + '%' : '-';
   const homeWRText = data.homeWR !== null ? (data.homeWR*100).toFixed(1)+'%' : '-';
   const awayWRText = data.awayWR !== null ? (data.awayWR*100).toFixed(1)+'%' : '-';
 
-  // 연속 결과 표시 (W4 → 4연승, L2 → 2연패)
   // 최근 경기 요약
   const recentSummary = recentRecord && recentRecord.total > 0
     ? `최근 ${recentRecord.total}경기 ${recentRecord.wins}승 ${recentRecord.draws}무 ${recentRecord.losses}패 (${recentRecord.winRate !== null ? (recentRecord.winRate*100).toFixed(1)+'%' : '-'})`
     : null;
 
+  // 연속 결과
   let streakHTML = '-';
   if (data.streak) {
     const type = data.streak[0];
@@ -766,18 +776,6 @@ async function loadRecord(g, side) {
   const formHTML = data.form && data.form.length > 0
     ? data.form.map(r => `<span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;font-size:12px;font-weight:600;margin:2px;background:${r==='승'?'#e8f4ee':r==='무'?'#f5f5f0':'#fde8e8'};color:${r==='승'?'#1a7a47':r==='무'?'#888':'#e53935'}">${r}</span>`).join('')
     : '<span style="color:#aaa;font-size:13px">데이터 없음</span>';
-
-  // 과거 회차 데이터로 최근 10경기 승패 조회
-  let rawResults = [];
-  let recentRecord = null;
-  try {
-    const round = document.getElementById('round-sel')?.value || '65';
-    const recRes = await fetch(`${API}/api/teamrecord?team=${encodeURIComponent(teamName)}&current_round=${round}`);
-    recentRecord = await recRes.json();
-    if (recentRecord.total > 0) {
-      if (recentRecord.streak) data.streak = recentRecord.streak;
-    }
-  } catch(e) {}
 
   document.getElementById('modal-body').innerHTML = `
     <div class="record-summary">
