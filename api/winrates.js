@@ -63,9 +63,12 @@ async function fetchLeagueData(sport, leagueSeq) {
         losses = nums[2].val;
       }
 
+      // 득실률(1.0 초과 가능) 제외 - 배구 등 점수득실률은 승률로 사용 불가
+      if (winRate !== null && winRate > 1.0) winRate = null;
+
       // 승률 없으면 승/무/패로 계산
       if (winRate === null && wins !== null) {
-        const total = wins + losses;  // 무승부 제외한 승패
+        const total = wins + (draws||0) + losses;
         if (total > 0) winRate = parseFloat((wins / total).toFixed(3));
       }
       if (winRate === null) continue;
@@ -220,18 +223,19 @@ function buildNormalizedMap(teamData) {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   try {
-    const [mlbData, kboData, npbData, nbaData, kblData, scData, vlData, nationalData] = await Promise.all([
-      fetchLeagueData('bs', '40'),   // MLB
-      fetchLeagueData('bs', '39'),   // KBO
-      fetchLeagueData('bs', '159'),  // NPB
-      fetchLeagueData('bk', '45'),   // NBA
-      fetchLeagueData('bk', '44'),   // KBL
-      fetchLeagueData('sc'),          // 축구
-      fetchLeagueData('vl'),          // 배구
+    const [mlbData, kboData, npbData, nbaData, kblData, scData, vlData, vlNationsData, nationalData] = await Promise.all([
+      fetchLeagueData('bs', '40'),    // MLB
+      fetchLeagueData('bs', '39'),    // KBO
+      fetchLeagueData('bs', '159'),   // NPB
+      fetchLeagueData('bk', '45'),    // NBA
+      fetchLeagueData('bk'),           // KBL (기본값)
+      fetchLeagueData('sc'),           // 축구
+      fetchLeagueData('vl', '254'),   // KOVO 남자배구
+      fetchLeagueData('vl', '282'),   // 여자 네이션스리그 (세계대회)
       fetchNationalData(),
     ]);
     const fifaData = getFifaData();
-    const allTeams = { ...fifaData, ...nationalData, ...scData, ...mlbData, ...kboData, ...npbData, ...nbaData, ...kblData, ...vlData };
+    const allTeams = { ...fifaData, ...nationalData, ...scData, ...mlbData, ...kboData, ...npbData, ...nbaData, ...kblData, ...vlData, ...vlNationsData };
 
     const winRates = {};
     for (const [name, data] of Object.entries(allTeams)) {
