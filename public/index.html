@@ -735,15 +735,81 @@ async function openModal(gameNo) {
   await loadRecord(g, 'home');
 }
 
-function openWisetotoRecord(side) {
+async function openWisetotoRecord(side) {
   if (!currentModal) return;
   const g = currentModal;
   const target = side === 'away' ? 'a' : 'h';
-  if (g.homeSeq && g.awaySeq) {
+  const teamName = side === 'away' ? g.away : g.home;
+
+  // 탭 활성화
+  document.getElementById('tab-home').classList.toggle('active', side === 'home');
+  document.getElementById('tab-away').classList.toggle('active', side === 'away');
+
+  if (!g.homeSeq || !g.awaySeq) {
+    // seq 없으면 기존 팀 데이터로 표시
+    await loadRecord(g, side);
+    return;
+  }
+
+  document.getElementById('modal-body').innerHTML = '<div class="record-loading"><span class="spinner"></span> 전적 불러오는 중...</div>';
+
+  try {
     const url = `https://www.wisetoto.com/gameinfo/team_record.htm?game_category=pt1&home_team_info_seq=${g.homeSeq}&away_team_info_seq=${g.awaySeq}&game_date=${encodeURIComponent(g.gameDate)}&target=${target}&type=all&list_num=10`;
-    window.open(url, '_blank');
-  } else {
-    window.open(`https://www.wisetoto.com/index.htm?tab_type=proto&game_type=pt&game_category=pt1`, '_blank');
+    const res = await fetch(url);
+    const html = await res.text();
+
+    // 테이블 파싱
+    const results = [];
+    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let trMatch;
+    while ((trMatch = trRegex.exec(html)) !== null) {
+      const tds = [];
+      const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let tdMatch;
+      while ((tdMatch = tdRegex.exec(trMatch[1])) !== null) {
+        tds.push(tdMatch[1].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim());
+      }
+      if (tds.length >= 5 && /\d{4}\.\d{2}\.\d{2}/.test(tds[0])) {
+        const resultRaw = tds.find(t => /홈승|홈패|홈무|원정승|원정패|원정무/.test(t)) || '';
+        const rm = resultRaw.match(/홈승|홈패|홈무|원정승|원정패|원정무/);
+        if (rm) {
+          const rr = rm[0];
+          let result = '-';
+          if (target==='h') { if(rr==='홈승') result='승'; else if(rr==='홈무') result='무'; else if(rr==='홈패') result='패'; }
+          else { if(rr==='원정승') result='승'; else if(rr==='원정무') result='무'; else if(rr==='원정패') result='패'; }
+          if (result !== '-') results.push({ date:tds[0].slice(5,10), league:tds[1]||'', home:tds[2]||'', score:tds[3]||'', away:tds[4]||'', result });
+        }
+      }
+    }
+
+    if (results.length === 0) {
+      // 전적 없으면 기존 데이터로 표시
+      await loadRecord(g, side);
+      return;
+    }
+
+    const wins = results.filter(r=>r.result==='승').length;
+    const draws = results.filter(r=>r.result==='무').length;
+    const losses = results.filter(r=>r.result==='패').length;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:#444;">
+        ${teamName} 최근 ${results.length}경기 
+        <span style="color:#1a7a47">${wins}승</span> 
+        ${draws>0?`<span style="color:#888">${draws}무</span>`:''}
+        <span style="color:#e53935">${losses}패</span>
+      </div>
+      ${results.map(r=>`
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 6px;border-radius:6px;background:#f8f8f6;margin-bottom:4px;">
+          <span style="color:#aaa;min-width:36px">${r.date}</span>
+          <span style="color:#888;min-width:30px;font-size:11px">${r.league}</span>
+          <span style="flex:1">${r.home} ${r.score} ${r.away}</span>
+          <span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;
+            background:${r.result==='승'?'#e8f4ee':r.result==='무'?'#f5f5f0':'#fde8e8'};
+            color:${r.result==='승'?'#1a7a47':r.result==='무'?'#888':'#e53935'}">${r.result}</span>
+        </div>`).join('')}`;
+  } catch(e) {
+    await loadRecord(g, side);
   }
 }
 
@@ -816,11 +882,12 @@ async function loadRecord(g, side) {
     `<div class="record-stat"><div class="record-stat-label">연속</div><div class="record-stat-value" style="font-size:16px">${streakHTML}</div></div>`,
   ].filter(Boolean).join('');
 
-  // 승/무/패 (무가 없는 종목은 2칸으로)
-  const hasDraw = data.draws !== null && data.draws !== undefined;
-  const winsVal = recentRecord?.wins ?? data.wins;
-  const drawsVal = recentRecord?.draws ?? data.draws;
-  const lossesVal = recentRecord?.losses ?? data.losses;
+  // 승/무/패 - teamData 우선, recentRecord 보조
+  const tdFull = getTeamData(teamName);
+  const winsVal = (tdFull?.wins !== null && tdFull?.wins !== undefined) ? tdFull.wins : null;
+  const drawsVal = (tdFull?.draws !== null && tdFull?.draws !== undefined) ? tdFull.draws : null;
+  const lossesVal = (tdFull?.losses !== null && tdFull?.losses !== undefined) ? tdFull.losses : null;
+  const hasDraw = drawsVal !== null;
   const wdlGrid = hasDraw
     ? `grid-template-columns:1fr 1fr 1fr`
     : `grid-template-columns:1fr 1fr`;
