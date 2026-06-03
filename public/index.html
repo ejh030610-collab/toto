@@ -808,38 +808,43 @@ async function loadRecord(g, side) {
     ? data.form.map(r => `<span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;font-size:12px;font-weight:600;margin:2px;background:${r==='승'?'#e8f4ee':r==='무'?'#f5f5f0':'#fde8e8'};color:${r==='승'?'#1a7a47':r==='무'?'#888':'#e53935'}">${r}</span>`).join('')
     : '<span style="color:#aaa;font-size:13px">데이터 없음</span>';
 
-  document.getElementById('modal-body').innerHTML = `
-    <div class="record-summary">
-      <div class="record-stat">
-        <div class="record-stat-label">시즌 승률</div>
-        <div class="record-stat-value green">${wr}</div>
-      </div>
-      <div class="record-stat">
-        <div class="record-stat-label">홈 승률</div>
-        <div class="record-stat-value">${homeWRText}</div>
-      </div>
-      <div class="record-stat">
-        <div class="record-stat-label">원정 승률</div>
-        <div class="record-stat-value">${awayWRText}</div>
-      </div>
-      <div class="record-stat">
-        <div class="record-stat-label">연속</div>
-        <div class="record-stat-value" style="font-size:16px">${streakHTML}</div>
-      </div>
+  // 홈/원정 승률 있는 경우만 표시
+  const wrCards = [
+    `<div class="record-stat"><div class="record-stat-label">시즌 승률</div><div class="record-stat-value green">${wr}</div></div>`,
+    data.homeWR !== null ? `<div class="record-stat"><div class="record-stat-label">홈 승률</div><div class="record-stat-value">${homeWRText}</div></div>` : '',
+    data.awayWR !== null ? `<div class="record-stat"><div class="record-stat-label">원정 승률</div><div class="record-stat-value">${awayWRText}</div></div>` : '',
+    `<div class="record-stat"><div class="record-stat-label">연속</div><div class="record-stat-value" style="font-size:16px">${streakHTML}</div></div>`,
+  ].filter(Boolean).join('');
+
+  // 승/무/패 (무가 없는 종목은 2칸으로)
+  const hasDraw = data.draws !== null && data.draws !== undefined;
+  const winsVal = recentRecord?.wins ?? data.wins;
+  const drawsVal = recentRecord?.draws ?? data.draws;
+  const lossesVal = recentRecord?.losses ?? data.losses;
+  const wdlGrid = hasDraw
+    ? `grid-template-columns:1fr 1fr 1fr`
+    : `grid-template-columns:1fr 1fr`;
+
+  const wdlCards = `
+    <div style="text-align:center;background:#f8f8f6;border-radius:8px;padding:8px;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;">승</div>
+      <div style="font-size:20px;font-weight:600;color:#1a7a47">${winsVal ?? '-'}</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:1rem;">
-      <div style="text-align:center;background:#f8f8f6;border-radius:8px;padding:8px;">
-        <div style="font-size:11px;color:#888;margin-bottom:4px;">승</div>
-        <div style="font-size:20px;font-weight:600;color:#1a7a47">${data.wins ?? '-'}</div>
-      </div>
-      <div style="text-align:center;background:#f8f8f6;border-radius:8px;padding:8px;">
-        <div style="font-size:11px;color:#888;margin-bottom:4px;">무</div>
-        <div style="font-size:20px;font-weight:600">${data.draws ?? '-'}</div>
-      </div>
-      <div style="text-align:center;background:#f8f8f6;border-radius:8px;padding:8px;">
-        <div style="font-size:11px;color:#888;margin-bottom:4px;">패</div>
-        <div style="font-size:20px;font-weight:600;color:#e53935">${data.losses ?? '-'}</div>
-      </div>
+    ${hasDraw ? `<div style="text-align:center;background:#f8f8f6;border-radius:8px;padding:8px;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;">무</div>
+      <div style="font-size:20px;font-weight:600">${drawsVal ?? '-'}</div>
+    </div>` : ''}
+    <div style="text-align:center;background:#f8f8f6;border-radius:8px;padding:8px;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;">패</div>
+      <div style="font-size:20px;font-weight:600;color:#e53935">${lossesVal ?? '-'}</div>
+    </div>`;
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="record-summary" style="grid-template-columns:repeat(${data.homeWR!==null&&data.awayWR!==null?4:data.homeWR!==null||data.awayWR!==null?3:2},1fr)">
+      ${wrCards}
+    </div>
+    <div style="display:grid;${wdlGrid};gap:8px;margin-top:1rem;">
+      ${wdlCards}
     </div>
     <div style="margin-top:1rem;">
       <div style="font-size:12px;color:#888;margin-bottom:8px;">최근 폼</div>
