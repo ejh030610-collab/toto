@@ -1,7 +1,9 @@
 const fetch = require('node-fetch');
 
-async function fetchLeagueData(sport) {
-  const url = `https://www.wisetoto.com/news/league_ranking.htm?sports=${sport}`;
+async function fetchLeagueData(sport, leagueSeq) {
+  const url = leagueSeq
+    ? `https://www.wisetoto.com/news/league_ranking.htm?sports=${sport}&league_info_seq=${leagueSeq}`
+    : `https://www.wisetoto.com/news/league_ranking.htm?sports=${sport}`;
   try {
     const res = await fetch(url, {
       headers: {
@@ -51,10 +53,17 @@ async function fetchLeagueData(sport) {
         losses = parseInt(numCells[numCells.length - 1]);
       }
 
-      // 연속 결과 (W1, L2 등)
+      // 연속 결과 (2L, 4W, W1, L2 등 다양한 형식)
       let streak = null;
       for (let i = winRateIdx + 1; i < cells.length; i++) {
         if (/^[WL]\d+$/.test(cells[i])) { streak = cells[i]; break; }
+        if (/^\d+[WL]$/.test(cells[i])) {
+          // 4W → W4 형식으로 변환
+          const num = cells[i].match(/\d+/)[0];
+          const type = cells[i].match(/[WL]/)[0];
+          streak = type + num;
+          break;
+        }
       }
 
       // 최근 5경기 폼 파싱 (승 패 무 패 승 패턴)
@@ -178,15 +187,18 @@ function buildNormalizedMap(teamData) {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   try {
-    const [bsData, bkData, scData, vlData, nationalData] = await Promise.all([
-      fetchLeagueData('bs'),
-      fetchLeagueData('bk'),
-      fetchLeagueData('sc'),
-      fetchLeagueData('vl'),
+    const [mlbData, kboData, npbData, nbaData, kblData, scData, vlData, nationalData] = await Promise.all([
+      fetchLeagueData('bs', '40'),   // MLB
+      fetchLeagueData('bs', '39'),   // KBO
+      fetchLeagueData('bs', '159'),  // NPB
+      fetchLeagueData('bk', '45'),   // NBA
+      fetchLeagueData('bk', '44'),   // KBL
+      fetchLeagueData('sc'),          // 축구
+      fetchLeagueData('vl'),          // 배구
       fetchNationalData(),
     ]);
     const fifaData = getFifaData();
-    const allTeams = { ...fifaData, ...nationalData, ...scData, ...bsData, ...bkData, ...vlData };
+    const allTeams = { ...fifaData, ...nationalData, ...scData, ...mlbData, ...kboData, ...npbData, ...nbaData, ...kblData, ...vlData };
 
     const winRates = {};
     for (const [name, data] of Object.entries(allTeams)) {
