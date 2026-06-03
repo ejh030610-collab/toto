@@ -726,7 +726,7 @@ async function switchTab(side) {
 }
 
 async function loadRecord(g, side) {
-  document.getElementById('modal-body').innerHTML = '<div class="record-loading"><span class="spinner"></span> 데이터 불러오는 중...</div>';
+  document.getElementById('modal-body').innerHTML = '<div class="record-loading"><span class="spinner"></span> 최근 전적 검색중...</div>';
   const teamName = side === 'home' ? g.home : g.away;
   const td = getTeamData(teamName);
 
@@ -748,6 +748,11 @@ async function loadRecord(g, side) {
   const awayWRText = data.awayWR !== null ? (data.awayWR*100).toFixed(1)+'%' : '-';
 
   // 연속 결과 표시 (W4 → 4연승, L2 → 2연패)
+  // 최근 경기 요약
+  const recentSummary = recentRecord && recentRecord.total > 0
+    ? `최근 ${recentRecord.total}경기 ${recentRecord.wins}승 ${recentRecord.draws}무 ${recentRecord.losses}패 (${recentRecord.winRate !== null ? (recentRecord.winRate*100).toFixed(1)+'%' : '-'})`
+    : null;
+
   let streakHTML = '-';
   if (data.streak) {
     const type = data.streak[0];
@@ -762,41 +767,17 @@ async function loadRecord(g, side) {
     ? data.form.map(r => `<span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;font-size:12px;font-weight:600;margin:2px;background:${r==='승'?'#e8f4ee':r==='무'?'#f5f5f0':'#fde8e8'};color:${r==='승'?'#1a7a47':r==='무'?'#888':'#e53935'}">${r}</span>`).join('')
     : '<span style="color:#aaa;font-size:13px">데이터 없음</span>';
 
-  // 브라우저에서 직접 와이즈토토 최근전적 가져오기 시도
+  // 과거 회차 데이터로 최근 10경기 승패 조회
   let rawResults = [];
-  if (currentModal?.homeSeq && currentModal?.awaySeq) {
-    try {
-      const target = side === 'home' ? 'h' : 'a';
-      const recUrl = `https://www.wisetoto.com/gameinfo/team_record.htm?game_category=pt1&home_team_info_seq=${currentModal.homeSeq}&away_team_info_seq=${currentModal.awaySeq}&game_date=${encodeURIComponent(currentModal.gameDate)}&target=${target}&type=all&list_num=10`;
-      const recRes = await fetch(recUrl);
-      const recHtml = await recRes.text();
-      // 테이블 파싱
-      const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-      let trMatch;
-      while ((trMatch = trRegex.exec(recHtml)) !== null) {
-        const tds = [];
-        const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-        let tdMatch;
-        while ((tdMatch = tdRegex.exec(trMatch[1])) !== null) {
-          tds.push(tdMatch[1].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim());
-        }
-        if (tds.length >= 4 && /\d{4}\.\d{2}\.\d{2}/.test(tds[0])) {
-          const resultRaw = tds.find(t => /홈승|홈패|홈무|원정승|원정패|원정무/.test(t)) || '';
-          const resultMatch = resultRaw.match(/홈승|홈패|홈무|원정승|원정패|원정무/);
-          if (resultMatch) {
-            const rr = resultMatch[0];
-            let result = '-';
-            if (target === 'h') {
-              if (rr === '홈승') result = '승'; else if (rr === '홈무') result = '무'; else if (rr === '홈패') result = '패';
-            } else {
-              if (rr === '원정승') result = '승'; else if (rr === '원정무') result = '무'; else if (rr === '원정패') result = '패';
-            }
-            if (result !== '-') rawResults.push({ date: tds[0].slice(5,10), league: tds[1]||'', home: tds[2]||'', score: tds[3]||'', away: tds[4]||'', result });
-          }
-        }
-      }
-    } catch(e) {}
-  }
+  let recentRecord = null;
+  try {
+    const round = document.getElementById('round-sel')?.value || '65';
+    const recRes = await fetch(`${API}/api/teamrecord?team=${encodeURIComponent(teamName)}&current_round=${round}`);
+    recentRecord = await recRes.json();
+    if (recentRecord.total > 0) {
+      if (recentRecord.streak) data.streak = recentRecord.streak;
+    }
+  } catch(e) {}
 
   document.getElementById('modal-body').innerHTML = `
     <div class="record-summary">
@@ -835,14 +816,18 @@ async function loadRecord(g, side) {
       <div style="font-size:12px;color:#888;margin-bottom:8px;">최근 폼</div>
       <div>${formHTML}</div>
     </div>
+    ${recentSummary ? `
+    <div style="margin-top:0.8rem;padding:8px 12px;background:#f8f8f6;border-radius:8px;font-size:13px;color:#444;">
+      📊 ${recentSummary}
+    </div>` : ''}
     ${rawResults.length > 0 ? `
     <div style="margin-top:1rem;">
       <div style="font-size:12px;color:#888;margin-bottom:8px;">최근 ${rawResults.length}경기 전적</div>
       ${rawResults.map(r => `
-        <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 6px;border-radius:6px;background:#f8f8f6;margin-bottom:4px;">
-          <span style="color:#aaa;min-width:40px">${r.date}</span>
-          <span style="color:#888;min-width:36px;font-size:11px">${r.league}</span>
-          <span style="flex:1">${r.home} ${r.score} ${r.away}</span>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 6px;border-radius:6px;background:#f8f8f6;margin-bottom:4px;">
+          <span style="color:#aaa;min-width:36px">${r.date}</span>
+          <span style="flex:1">${r.home||''} <span style="color:#888">${r.score||''}</span> ${r.away||''}</span>
+          <span style="font-size:10px;color:#aaa">${r.home===teamName?'홈':'원정'}</span>
           <span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:${r.result==='승'?'#e8f4ee':r.result==='무'?'#f5f5f0':'#fde8e8'};color:${r.result==='승'?'#1a7a47':r.result==='무'?'#888':'#e53935'}">${r.result}</span>
         </div>`).join('')}
     </div>` : ''}`;
