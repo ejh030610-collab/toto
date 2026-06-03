@@ -34,6 +34,11 @@ async function fetchLeagueData(sport, leagueSeq) {
       let teamName = cells[1] ? cells[1].replace(/\(.*?\)/g, '').trim() : null;
       if (!teamName || /^\d/.test(teamName) || teamName.length < 2) continue;
 
+      // 선수 성적 행 제외: 팀명에 괄호(팀명 포함)가 있거나 점(.)이 있으면 선수
+      if (/\(/.test(cells[1]) || /^[A-Z]\.[가-힣]/.test(cells[1])) continue;
+      // 타율행 제외: 세번째 셀이 타수(100 이상 숫자)인 경우
+      if (cells[2] && /^\d{3,}$/.test(cells[2]) && parseInt(cells[2]) > 50 && cells.length > 8) continue;
+
       // 명시적 승률 (0.xxx)
       let winRate = null, winRateIdx = -1;
       for (let i = 2; i < cells.length; i++) {
